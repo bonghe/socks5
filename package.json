@@ -1,0 +1,23 @@
+{
+  "name": "socks5",
+  "version": "0.1.0",
+  "description": "SOCKS5 server and client implementations for node.js",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "keywords": [
+    "socks",
+    "socks5"
+  ],
+  "author": "BoundaryH",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^7.5.0",
+    "eslint-config-google": "^0.14.0",
+    "mocha": "^8.0.1"
+  },
+  "dependencies": {
+    "ip": "^1.1.5"
+  }
+}
