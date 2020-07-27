@@ -123,12 +123,6 @@ https.get({
 * **proxy (ss)**
     * ss - **< ServerSocket >**
 
-## TODO
-
-* Design Logging API
-* Support UDP ASSOCIATE command
-* Support BIND command
-
 ## References
 
 * [RFC 1928](https://tools.ietf.org/html/rfc1928)
