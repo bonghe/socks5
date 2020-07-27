@@ -12,11 +12,11 @@ function ServerSocket(socket) {
 
   self.socket = socket;
   self.connecting = true;
-  self._state = 'readMethodMessage';
   self._onData = onData.bind(self);
-  self._handshake = handshake.bind(self);
   self._onError = onError.bind(self);
   self._onReady = onReady.bind(self);
+  self._handshake = handshake(self);
+  self._handshake.next();
   self._writeBuffer = [];
   self.write = (...args) =>{
     self._writeBuffer.push(args);
@@ -33,95 +33,76 @@ function ServerSocket(socket) {
 
 const onData = function(chunk) {
   const self = this;
-  chunk = chunk === undefined ? Buffer.alloc(0) : chunk;
-  if (self._chunk instanceof Buffer) {
-    chunk = Buffer.concat([self._chunk, chunk]);
-    self._chunk = undefined;
-  }
-
   try {
-    const nextState = self._handshake(chunk);
-    if (nextState === self._state) {
-      self._chunk = chunk;
+    if (self._handshake.next(chunk).done) {
+      self._onReady();
     }
-    self._state = nextState;
   } catch (err) {
     self._onError(err);
-    return;
-  }
-  if (self._state === 'finished') {
-    self._onReady();
   }
 };
 
 /**
- * @param {Buffer} chunk
- * @return {string} nextState
+ * @generator
+ * @param {ServerSocket} self
  */
-const handshake = function(chunk) {
-  const self = this;
+const handshake = function* (self) {
   const socket = self.socket;
-  let state = self._state;
+  let buf = undefined;
 
-  switch (state) {
-    case 'readMethodMessage':
-      const methods = socks5.parseMethodMessage(chunk);
-      if (methods === undefined) {
-        return state;
-      }
-      let selection = undefined;
-      for (let i = 0; i < methods.length; i++) {
-        const m = methods[i];
-        if (m === socks5.MethodNotRequired ||
-            m === socks5.MethodUsernamePassword) {
-          selection = m;
-          break;
-        }
-      }
-      if (selection === undefined) {
-        throw new Error('unsupported method');
-      }
-      socket.write(socks5.createMethodSelection(selection));
-      if (selection == socks5.MethodUsernamePassword) {
-        state = 'readAuthMessage';
-      } else if (selection == socks5.MethodNotRequired) {
-        state = 'readRequest';
-      }
-      break;
-    case 'readAuthMessage':
-      const auth = socks5.parseAuthMessage(chunk);
-      if (auth === undefined) {
-        return state;
-      }
-      self.username = auth.username;
-      self.password = auth.password;
-
-      socket.write(socks5.createAuthReply(true));
-      state = 'readRequest';
-      break;
-    case 'readRequest':
-      const req = socks5.parseRequest(chunk);
-      if (req === undefined) {
-        return state;
-      }
-      if (req.cmd != socks5.CmdConnect) {
-        throw new Error('invalid request cmd');
-      }
-      self.dstHost = req.host;
-      self.dstPort = req.port;
-
-      socket.write(socks5.createReply(true, '0.0.0.0', 0));
-      state = 'finished';
-      break;
-    default:
-      throw new Error('handshake error');
+  // method selection
+  let methods = undefined;
+  while (methods === undefined) {
+    const chunk = yield;
+    buf = buf === undefined ? chunk : Buffer.concat([buf, chunk]);
+    methods = socks5.parseMethodMessage(buf);
   }
-  return state;
+  buf = undefined;
+
+  while (methods.length > 0 &&
+    methods[0] !== socks5.MethodUsernamePassword &&
+    methods[0] !== socks5.MethodNotRequired) {
+    methods.shift();
+  }
+  if (methods.length === 0) {
+    throw new Error('unsupported method');
+  }
+  socket.write(socks5.createMethodSelection(methods[0]));
+
+  // authentication
+  if (methods[0] === socks5.MethodUsernamePassword) {
+    let auth = undefined;
+    while (auth === undefined) {
+      const chunk = yield;
+      buf = buf === undefined ? chunk : Buffer.concat([buf, chunk]);
+      auth = socks5.parseAuthMessage(buf);
+    }
+    buf = undefined;
+
+    self.username = auth.username;
+    self.password = auth.password;
+    socket.write(socks5.createAuthReply(true));
+  }
+
+  // read request
+  let req = undefined;
+  while (req === undefined) {
+    const chunk = yield;
+    buf = buf === undefined ? chunk : Buffer.concat([buf, chunk]);
+    req = socks5.parseRequest(buf);
+  }
+  buf = undefined;
+
+  if (req.cmd != socks5.CmdConnect) {
+    throw new Error('invalid request cmd');
+  }
+  self.dstHost = req.host;
+  self.dstPort = req.port;
+  socket.write(socks5.createReply(true, '0.0.0.0', 0));
 };
 
 const onError = function(err) {
   const self = this;
-  self._state = 'error';
   self.connecting = false;
   self.socket.removeListener('data', self._onData);
   self.socket.destroy();
