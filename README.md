@@ -11,6 +11,7 @@ Package socks5-js provides SOCKS5 server and client implementation for **node.js
 * No Authentication mode
 * UserName/Password authentication
 * Support CONNECT command
+* Provide HTTP.Agent and HTTPS.Agent
 
 ## Example
 
@@ -122,6 +123,11 @@ https.get({
 * **proxy (ss)**
     * ss - **< ServerSocket >**
 
+## TODO
+
+* Design Logging API
+* Support UDP ASSOCIATE command
+* Support BIND command
 
 ## References
 
