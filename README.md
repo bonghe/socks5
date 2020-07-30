@@ -1,4 +1,4 @@
-# SOCKS5-js
+# node-SOCKS5
 
 Package socks5-js provides SOCKS5 server and client implementation for **node.js**.
 
